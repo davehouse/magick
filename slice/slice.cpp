@@ -53,14 +53,16 @@ void list_formats(bool verbose=false) {
     while( entry != coderList.end() )
     {
         if (verbose) {
-            printf("%s: (%s) %b %b %b", entry->description().c_str(), entry->isReadable(), entry->isWritable(), entry->isMultiFrame());
+            printf("%s: (%s) %b %b %b", entry->name().c_str(),
+                entry->description().c_str(),
+                entry->isReadable(), entry->isWritable(), entry->isMultiFrame());
         } else {
             printf("%s%s ", entry->name().c_str(),
                 entry->isWritable() ? "" : "*");
         }
         entry++;
     }
-    printf("\n* : only as input image (not writable)\n");
+    printf("\n* : only as input image (not writable)\n\n");
 }
 
 int main(int argc,char **argv)
@@ -79,12 +81,16 @@ int main(int argc,char **argv)
     char* record = (char*) malloc(record_max_length);
     int record_length = 0;
 
+    bool help = false;
 
-    while ((c = getopt (argc, argv, "n::o::x::y::")) != -1) {
+    while ((c = getopt (argc, argv, "n::o::x::y::h")) != -1) {
         if (optarg == NULL) {
             continue;
         }
         switch (c) {
+        case 'h':
+            help = true;
+            break;
         case 'o':
             overlap = atoi(optarg);
             break;
@@ -104,14 +110,21 @@ int main(int argc,char **argv)
                 fprintf (stderr,
                     "Unknown option character `\\x%x'.\n",
                     optopt);
-            return 1;
+            help = true;
         default:
             break;
         }
     }
 
-    if (optind == argc) {
-        printf ("Usage: <input_image_file> <output_image_file> -x10 -y1\n");
+    if (optind == argc || help == true) {
+        printf("\nUsage: [ options ] <input_image_file> [ <output_image_file> ]\n\n");
+        printf("Options:\n");
+        printf("\t-x\t:\thorizontal slicing target count/ratio ( 0: no horizontal cuts )\n");
+        printf("\t-y\t:\tvertical slicing target count/ratio ( 0: no vertical cuts )\n");
+        printf("Examples:\n");
+        printf("\t-x5 -y3  # Cuts are 5:3. For a 500x300px image this would return 100px square slices.\n");
+        printf("\t-x0 -y1  # Cuts are 0:1. Slices will have original image width.\n");
+        printf("\t-x2 -y1  # Cuts are 2:1. Slices will have width double their height.\n");
         list_formats();
         return 0;
     }
@@ -120,10 +133,13 @@ int main(int argc,char **argv)
 
     char *pre;
     char *suf;
+    char *dir;
     if (optind + 1 < argc) {
         if (strstr(argv[optind + 1], "%d") != NULL) {
             sprintf(output, "%s", argv[optind + 1]);
         } else {
+            dir = strtok(argv[optind + 1], "/");
+            dprintf("directory output is:%s", dir);
             pre = strtok(argv[optind + 1], ".");
             suf = strtok(NULL, ".");
             sprintf(output, "%s.%s.%s",
@@ -252,14 +268,14 @@ int main(int argc,char **argv)
     record_length += sprintf(record + record_length, "}}");
     dprintf("%s\n", record);
 
-    sprintf(filename, "%s.json", pre);
+    sprintf(filename, "%s/1", dir);
     FILE *page_file;
     page_file = fopen (filename, "w");
     dprintf("%s\n", record);
     fprintf(page_file, "%s\n", record);
     fclose (page_file);
 
-    sprintf(filename, "%s.json", pre);
+    sprintf(filename, "%s/toc.json", dir);
     page_file = fopen (filename, "w");
     dprintf("%s\n", record);
     fprintf(page_file, "%s\n", record);
