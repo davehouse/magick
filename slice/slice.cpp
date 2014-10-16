@@ -19,12 +19,8 @@
 COMPILE:
 c++ `Magick++-config --cxxflags --cppflags` -O2 -o slice slice.cpp   `Magick++-config --ldflags --libs`
 */
+
 #include <stdlib.h>
-
-#include <iostream>
-
-//#include <stdio.h>
-//#include <unistd.h>
 #include <getopt.h>
 #include <string.h>
 #include <math.h>
@@ -35,10 +31,37 @@ using namespace std;
 using namespace Magick;
 
 #ifdef DEBUG
-#define DPRINTF(s) printf(s)
+#define dprintf(format, ...) fprintf(stderr, format, __VA_ARGS__)
 #else
-#define DPRINTF(s)
+#define dprintf(...)
 #endif
+
+void list_formats(bool verbose=false) {
+    list<CoderInfo> coderList;
+
+    coderInfoList( &coderList,
+        CoderInfo::TrueMatch,   // readable
+        CoderInfo::AnyMatch,    // writable
+        CoderInfo::AnyMatch);   // multi-frame
+
+    list<CoderInfo>::iterator entry = coderList.begin();
+
+    printf("Supported input formats: ");
+    if (verbose) {
+        printf("EXT: (description) readable writable multiframe");
+    }
+    while( entry != coderList.end() )
+    {
+        if (verbose) {
+            printf("%s: (%s) %b %b %b", entry->description().c_str(), entry->isReadable(), entry->isWritable(), entry->isMultiFrame());
+        } else {
+            printf("%s%s ", entry->name().c_str(),
+                entry->isWritable() ? "" : "*");
+        }
+        entry++;
+    }
+    printf("\n* : only as input image (not writable)\n");
+}
 
 int main(int argc,char **argv)
 {
@@ -89,6 +112,7 @@ int main(int argc,char **argv)
 
     if (optind == argc) {
         printf ("Usage: <input_image_file> <output_image_file> -x10 -y1\n");
+        list_formats();
         return 0;
     }
 
@@ -112,12 +136,12 @@ int main(int argc,char **argv)
         sprintf(output, "%s%s.png", input, "%d");
     }
 
-    DPRINTF("image filename:%s\n", input);
-    DPRINTF("output image filename:%s\n", output);
-    DPRINTF("maximum pixel count for slices:%d\n", max);
-    DPRINTF("target slices horizontally:%d\n", y);
-    DPRINTF("target slices vertically:%d\n", x);
-    DPRINTF("slice overlap:%d\n", overlap);
+    dprintf("image filename:%s\n", input);
+    dprintf("output image filename:%s\n", output);
+    dprintf("maximum pixel count for slices:%d\n", max);
+    dprintf("target slices horizontally:%d\n", y);
+    dprintf("target slices vertically:%d\n", x);
+    dprintf("slice overlap:%d\n", overlap);
 
     InitializeMagick(*argv);
 
@@ -127,7 +151,7 @@ int main(int argc,char **argv)
     }
     catch( Exception &error_ )
     {
-        cout << "Error reading image: " << error_.what() << endl;
+        printf("Error reading image: %s\n", error_.what());
         return 1;
     }
 
@@ -137,7 +161,7 @@ int main(int argc,char **argv)
     try {
         w = image.columns();
         h = image.rows();
-        printf("w:%d h:%d\n", w, h);
+        dprintf("w:%d h:%d\n", w, h);
 
         sw = w;
         sh = h;
@@ -155,8 +179,8 @@ int main(int argc,char **argv)
 
         slices = (w / sw) * (h / sh);
 
-        printf("slice w:%d h:%d\n", sw, sh);
-        printf("slice count:%d\n", slices);
+        dprintf("slice w:%d h:%d\n", sw, sh);
+        dprintf("slice count:%d\n", slices);
 
         record_length = sprintf(record, "{\"original\":\"%s\"", input);
         record_length += sprintf(record + record_length, ",\"mime_type\":\"application/json\"");
@@ -172,12 +196,12 @@ int main(int argc,char **argv)
         record_length += sprintf(record + record_length, ",\"canvas_width\":%d,\"canvas_height\":%d", w, h);
         record_length += sprintf(record + record_length, ",\"draw_instructions\":\"(function(c,d){");
 
-        fprintf(stdout, "%s\n", record);
+        dprintf("%s\n", record);
 
     }
     catch( Exception &error_ )
     {
-        cout << "Error calculating image slice dimensions: " << error_.what() << endl;
+        printf("Error calculating image slice dimensions: %s\n", error_.what());
         return 1;
     }
 
@@ -187,8 +211,7 @@ int main(int argc,char **argv)
         while (slices) {
             sprintf(filename, output, slices);
             slices--;
-            printf("writing %s slice\n", filename);
-            fflush(stdout);
+            dprintf("writing %s slice\n", filename);
             /*
             slice.crop("%dx%d+%d+%d",
                 sw + overlap, sh + overlap,
@@ -196,7 +219,7 @@ int main(int argc,char **argv)
             */
             // size_t width_, size_t height_, ssize_t xOff_ = 0, ssize_t yOff_
             // = 0, bool xNegative_ = false, bool yNegative_ = false
-            printf("%d %d, %d %d", sw + overlap, sh + overlap, xoffset, yoffset);
+            dprintf("%d %d, %d %d", sw + overlap, sh + overlap, xoffset, yoffset);
             Image slice = image;
             slice.crop(
                 Geometry(sw + overlap, sh + overlap, xoffset, yoffset));
@@ -206,7 +229,7 @@ int main(int argc,char **argv)
                 yoffset += sh;
             }
             if (yoffset >= h) {
-                printf("finished slicing xoff:%d yoff:%d slices remain:%d last filename:%s\n",
+                dprintf("finished slicing xoff:%d yoff:%d slices remain:%d last filename:%s\n",
                     xoffset, yoffset, slices, filename);
             }
             slice.write(filename);
@@ -219,7 +242,7 @@ int main(int argc,char **argv)
     }
     catch( Exception &error_ )
     {
-        cout << "Error creating image slices: " << error_.what() << endl;
+        printf("Error creating image slices: %s\n", error_.what());
         return 1;
     }
 
@@ -227,18 +250,18 @@ int main(int argc,char **argv)
     record_length += sprintf(record + record_length, "})\",\"images\":\"[%s]\"",
         images);
     record_length += sprintf(record + record_length, "}}");
-    fprintf(stdout, "%s\n", record);
+    dprintf("%s\n", record);
 
     sprintf(filename, "%s.json", pre);
     FILE *page_file;
     page_file = fopen (filename, "w");
-    fprintf(stdout, "%s\n", record);
+    dprintf("%s\n", record);
     fprintf(page_file, "%s\n", record);
     fclose (page_file);
 
     sprintf(filename, "%s.json", pre);
     page_file = fopen (filename, "w");
-    fprintf(stdout, "%s\n", record);
+    dprintf("%s\n", record);
     fprintf(page_file, "%s\n", record);
     fclose (page_file);
 
