@@ -19,6 +19,7 @@
 COMPILE:
 c++ `Magick++-config --cxxflags --cppflags` -O2 -o slice slice.cpp   `Magick++-config --ldflags --libs`
 */
+char *version = "0.0.2";
 
 #include <stdlib.h>
 #include <getopt.h>
@@ -76,6 +77,8 @@ int main(int argc,char **argv)
     int max = 3e6;
     int slices = 1;
     int overlap = 0;
+    char *images = (char*) malloc(2048);
+    int images_length = 0;
 
     const int record_max_length = 1024 * 1024 * 1024;
     char* record = (char*) malloc(record_max_length);
@@ -139,10 +142,14 @@ int main(int argc,char **argv)
             sprintf(output, "%s", argv[optind + 1]);
         } else {
             dir = strtok(argv[optind + 1], "/");
-            dprintf("directory output is:%s", dir);
+            dprintf("directory output is:%s\n", dir);
             pre = strtok(argv[optind + 1], ".");
             suf = strtok(NULL, ".");
-            sprintf(output, "%s.%s.%s",
+            if (suf == NULL) {
+                suf = "jpg";
+            }
+            dprintf("pre:%s suf:%s", pre, suf);
+            sprintf(output, "%s/%s.%s",
                 pre,
                 "%d",
                 suf
@@ -168,6 +175,7 @@ int main(int argc,char **argv)
     catch( Exception &error_ )
     {
         printf("Error reading image: %s\n", error_.what());
+        fflush(stdout);
         return 1;
     }
 
@@ -185,15 +193,25 @@ int main(int argc,char **argv)
         int scale = 1;
         do {
             if (x >= 1) {
-                sw = ceilf(float(w) / (x * scale));
+                dprintf("\nw:%d x*scale:%f w/(x*scale):%f ceilf(...):%f",
+                    w, float(x * scale),
+                    float(w) / float(x * scale),
+                    ceilf(float(w) / float(x * scale)));
+                sw = int(ceilf(float(w) / float(x * scale)));
             }
             if (y >= 1 || x < 1) {
-                sh = ceilf(float(h) / (y * scale));
+                dprintf("\nh:%d y*scale:%f h/(y*scale):%f ceilf(...):%f",
+                    h, float(y * scale),
+                    float(h) / float(y * scale),
+                    ceilf(float(h) / float(y * scale)));
+                sh = int(ceilf(float(h) / float(y * scale)));
             }
             scale++;
+            dprintf("\nscale:%d, w:%d h:%d - sw*sh:%f max:%d", scale, w, h, float(sw * sh), max);
         } while (sw * sh > max);
 
-        slices = (w / sw) * (h / sh);
+        slices = int(ceilf(float(float(w) / float(sw)) * float(float(h) / float(sh))));
+        dprintf("(w / sw):%f (h / sh):%f", float(float(w) / float(sw)), float(float(h) / float(sh)));
 
         dprintf("slice w:%d h:%d\n", sw, sh);
         dprintf("slice count:%d\n", slices);
@@ -218,6 +236,7 @@ int main(int argc,char **argv)
     catch( Exception &error_ )
     {
         printf("Error calculating image slice dimensions: %s\n", error_.what());
+        fflush(stdout);
         return 1;
     }
 
@@ -225,20 +244,37 @@ int main(int argc,char **argv)
         int xoffset = 0;
         int yoffset = 0;
         while (slices) {
+            dprintf("creating %d slice\n", slices);
+            dprintf("output %s\n", output);
             sprintf(filename, output, slices);
+            dprintf("filename: %s\n", filename);
+            try {
+                images_length += sprintf(images + images_length,
+                    "{\\\"id\\\":\\\"%d\\\",\\\"url\\\":\\\"%s\\\"},", slices, filename);
+            dprintf("images: %s\n", images);
+            }
+            catch( Exception &error_ )
+            {
+                printf("Error adding image to list: %s\n", error_.what());
+        fflush(stdout);
+                return 1;
+            }
             slices--;
             dprintf("writing %s slice\n", filename);
-            /*
-            slice.crop("%dx%d+%d+%d",
-                sw + overlap, sh + overlap,
-                xoffset, yoffset);
-            */
-            // size_t width_, size_t height_, ssize_t xOff_ = 0, ssize_t yOff_
-            // = 0, bool xNegative_ = false, bool yNegative_ = false
             dprintf("%d %d, %d %d", sw + overlap, sh + overlap, xoffset, yoffset);
             Image slice = image;
+            try {
             slice.crop(
                 Geometry(sw + overlap, sh + overlap, xoffset, yoffset));
+            }
+            catch( Exception &error_ )
+            {
+                printf("Error creating cropped slice: %s crop(%d, %d, %d, %d)\n",
+                    error_.what(),
+                    sw + overlap, sh + overlap, xoffset, yoffset);
+        fflush(stdout);
+                return 1;
+            }
             xoffset += sw;
             if (xoffset >= w) {
                 xoffset = 0;
@@ -250,36 +286,62 @@ int main(int argc,char **argv)
             }
             slice.write(filename);
 
-            char *tile_name = "tilenamehere";
-            record_length += sprintf(record + record_length, "d[\'%s\'](c,%d,%d);",
-                tile_name, xoffset, yoffset);
-
+            record_length += sprintf(record + record_length, "d[\'%d\'](c,%d,%d);",
+                slices, xoffset, yoffset);
         }
     }
     catch( Exception &error_ )
     {
         printf("Error creating image slices: %s\n", error_.what());
+        fflush(stdout);
         return 1;
     }
 
-    char *images = "imagelisthere";
-    record_length += sprintf(record + record_length, "})\",\"images\":\"[%s]\"",
+    try {
+    record_length += sprintf(record + record_length, "})\",\"images\":\"[%s{}]\"",
         images);
     record_length += sprintf(record + record_length, "}}");
     dprintf("%s\n", record);
 
     sprintf(filename, "%s/1", dir);
+    }
+    catch( Exception &error_ )
+    {
+        printf("Error creating page json: %s\n", error_.what());
+        fflush(stdout);
+        return 1;
+    }
     FILE *page_file;
-    page_file = fopen (filename, "w");
-    dprintf("%s\n", record);
-    fprintf(page_file, "%s\n", record);
-    fclose (page_file);
+    try {
+        page_file = fopen (filename, "w");
+        dprintf("%s\n", record);
+        fprintf(page_file, "%s\n", record);
+        fclose (page_file);
+    }
+    catch( Exception &error_ )
+    {
+        printf("Error writing page json: %s\n", error_.what());
+        fflush(stdout);
+        return 1;
+    }
 
-    sprintf(filename, "%s/toc.json", dir);
-    page_file = fopen (filename, "w");
-    dprintf("%s\n", record);
-    fprintf(page_file, "%s\n", record);
-    fclose (page_file);
+    try {
+        sprintf(filename, "%s/toc.json", dir);
+        page_file = fopen (filename, "w");
+        record_length = sprintf(record, "{\"version\":{\"Branch\":\"%s\"},\"meta\":\"\"", version);
+        record_length += sprintf(record + record_length, ",\"max_page_width\":%d,\"max_page_height\":%d", w, h);
+        record_length += sprintf(record + record_length, ",\"pages\":[{\"url\":\"rendered/1\",\"width\":%d,\"height\":%d,\"mime_type\":\"application/json\"}]", w, h);
+// {"max_page_height":2696,"max_page_width":4000,"pages":[{"url":"rendered/page1","width":4000,"height":2696,"mime_type":"application/json"}],"meta":"","version":{"Branch":"narcissus"}}
+        record_length = sprintf(record + record_length, "}");
+        fprintf(page_file, "%s\n", record);
+        fclose (page_file);
+    }
+    catch( Exception &error_ )
+    {
+        printf("Error writing toc: %s\n", error_.what());
+        fflush(stdout);
+        return 1;
+    }
 
     return 0;
 }
