@@ -109,7 +109,7 @@ int main (int argc, char **argv) {
     x = 0;
     w = 0;
     h = sliceh + overlap;
-    for (int i=n-1; i >= 0; --i) {
+    for (int i = 0; i < n; ++i) {
         y = i * sliceh;
         fprintf(stderr, "%d * %d = %d  \t", i, sliceh, y);
         if (i == n - 1) {
@@ -130,7 +130,7 @@ int main (int argc, char **argv) {
     fprintf(stderr, "Next, perform transforms ...\n");
     int flags = 0;
     if (-1 == tjTransform(handle, jpegBuf, jpegSize,
-                     n, dstBufs, dstSizes, transforms, flags)) {
+                     n, dstBufs, dstSizes, transforms, flags, outfilename2)) {
         fprintf(stderr, "Error with transform: %s\n", tjGetErrorStr());
         exit(1);
     }
@@ -138,8 +138,9 @@ int main (int argc, char **argv) {
     fprintf(stderr, "destroy transform handler ...\n");
     tjDestroy(handle);
 
+    /*
     fprintf(stderr, "write buffers to files ...\n");
-    for (int i=n-1; i >= 0; --i) {
+    for (int i = 0; i < n; ++i) {
         sprintf(outfilename, "%s-%d.jpg", outfilename2, i);
         fprintf(stderr, "size=%lu fn=%s\n", dstSizes[i], outfilename);
 
@@ -157,6 +158,7 @@ int main (int argc, char **argv) {
     for (int i=n-1; i >= 0; --i) {
 //        tjFree(dstBufs[i]);
     }
+    */
 
     return 0;
 }
