@@ -216,19 +216,9 @@ int main(int argc,char **argv)
         dprintf("slice w:%d h:%d\n", sw, sh);
         dprintf("slice count:%d\n", slices);
 
-        record_length = sprintf(record, "{\"original\":\"%s\"", input);
-        record_length += sprintf(record + record_length, ",\"mime_type\":\"application/json\"");
+        record_length = sprintf(record, "{");
         record_length += sprintf(record + record_length, ",\"width\":%d,\"height\":%d", w, h);
-        record_length += sprintf(record + record_length, ",\"url\":\"%s\"", output);
-        record_length += sprintf(record + record_length, "}");
-
-        record_length = sprintf(record, "{\"status\":200,\"result\":{");
-        record_length += sprintf(record + record_length, "\"content_type\":\"canvas\"");
-        record_length += sprintf(record + record_length, ",\"fonts\":\"[]\"");
-        record_length += sprintf(record + record_length, ",\"metrics\":\"[]\"");
-        record_length += sprintf(record + record_length, ",\"links\":\"[]\"");
-        record_length += sprintf(record + record_length, ",\"canvas_width\":%d,\"canvas_height\":%d", w, h);
-        record_length += sprintf(record + record_length, ",\"draw_instructions\":\"(function(c,d){");
+        record_length += sprintf(record + record_length, ",\"draw\":\"{");
 
         dprintf("%s\n", record);
 
@@ -286,7 +276,7 @@ int main(int argc,char **argv)
             }
             slice.write(filename);
 
-            record_length += sprintf(record + record_length, "d[\'%d\'](c,%d,%d);",
+            record_length += sprintf(record + record_length, "\'%d\':[%d,%d],",
                 slices, xoffset, yoffset);
         }
     }
@@ -298,7 +288,7 @@ int main(int argc,char **argv)
     }
 
     try {
-    record_length += sprintf(record + record_length, "})\",\"images\":\"[%s{}]\"",
+    record_length += sprintf(record + record_length, "}\",\"images\":\"[%s{}]\"",
         images);
     record_length += sprintf(record + record_length, "}}");
     dprintf("%s\n", record);
@@ -321,24 +311,6 @@ int main(int argc,char **argv)
     catch( Exception &error_ )
     {
         printf("Error writing page json: %s\n", error_.what());
-        fflush(stdout);
-        return 1;
-    }
-
-    try {
-        sprintf(filename, "%s/toc.json", dir);
-        page_file = fopen (filename, "w");
-        record_length = sprintf(record, "{\"version\":{\"Branch\":\"%s\"},\"meta\":\"\"", version);
-        record_length += sprintf(record + record_length, ",\"max_page_width\":%d,\"max_page_height\":%d", w, h);
-        record_length += sprintf(record + record_length, ",\"pages\":[{\"url\":\"rendered/1\",\"width\":%d,\"height\":%d,\"mime_type\":\"application/json\"}]", w, h);
-// {"max_page_height":2696,"max_page_width":4000,"pages":[{"url":"rendered/page1","width":4000,"height":2696,"mime_type":"application/json"}],"meta":"","version":{"Branch":"narcissus"}}
-        record_length = sprintf(record + record_length, "}");
-        fprintf(page_file, "%s\n", record);
-        fclose (page_file);
-    }
-    catch( Exception &error_ )
-    {
-        printf("Error writing toc: %s\n", error_.what());
         fflush(stdout);
         return 1;
     }
